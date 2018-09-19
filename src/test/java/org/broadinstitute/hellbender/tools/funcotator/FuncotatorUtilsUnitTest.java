@@ -9,11 +9,13 @@ import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFHeaderLineCount;
 import htsjdk.variant.vcf.VCFHeaderLineType;
 import htsjdk.variant.vcf.VCFInfoHeaderLine;
+import org.apache.commons.lang3.NotImplementedException;
 import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.engine.ReferenceDataSource;
 import org.broadinstitute.hellbender.engine.ReferenceFileSource;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.testutils.FuncotatorReferenceTestUtils;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.TableFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotationBuilder;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
@@ -23,7 +25,6 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
-import org.broadinstitute.hellbender.testutils.FuncotatorReferenceTestUtils;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -417,7 +418,7 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
     }
 
     @DataProvider
-    Object[][] provideDataForGetStartPositionInTranscript() {
+    Object[][] provideDataForGetStartPositionInCodingSequence() {
 
         final List<? extends Locatable> exons_forward = Arrays.asList(
                 new SimpleInterval("chr1", 10,19),
@@ -500,6 +501,9 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
 
     @DataProvider
     Object[][] provideDataForGetAlternateSequence() {
+
+        // TODO: Add - strand tests!
+
         return new Object[][] {
                 {
                     "01234567890A1234567890123456789", 12, Allele.create((byte)'A'), Allele.create((byte)'A'), "01234567890A1234567890123456789"
@@ -790,7 +794,11 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
 //        final Allele refAllele,
 //        final int codingSequenceRefAlleleStart,
 //        final int alignedRefAlleleStart
+//        final Strand strand
 //        expected
+
+        // TODO: Make tests with Strand.NEGATIVE!!!!
+        // TODO: Make tests with alt allele longer/shorter than ref allele!
 
 //                                                 11111111112222222222333333333344444444445555555555666666
 //                                       012345678901234567890123456789012345678901234567890123456789012345
@@ -799,54 +807,54 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
         return new Object[][] {
 
                 // alignedRefAlleleStart <= 0
-                {referenceSnippet, 10, Allele.create("CC", true), 1, -1, "GCCCAT"},
-                {referenceSnippet, 11, Allele.create("CA", true), 1, -1, "CCCATG"},
-                {referenceSnippet, 12, Allele.create("AT", true), 1, -1, "CCATGA"},
+                {referenceSnippet, 10, Allele.create("CC", true), 1, -1, Strand.POSITIVE, "GCCCAT"},
+                {referenceSnippet, 11, Allele.create("CA", true), 1, -1, Strand.POSITIVE, "CCCATG"},
+                {referenceSnippet, 12, Allele.create("AT", true), 1, -1, Strand.POSITIVE, "CCATGA"},
 
                 // (codingSequenceRefAlleleStart <= 0) && (alignedRefAlleleStart <= 0)
-                {referenceSnippet, 10, Allele.create("CC", true), 0, -2, "GCCCAT"},
-                {referenceSnippet, 11, Allele.create("CA", true), 0, -2, "CCCATG"},
-                {referenceSnippet, 12, Allele.create("AT", true), 0, -2, "CCATGA"},
+                {referenceSnippet, 10, Allele.create("CC", true), 0, -2, Strand.POSITIVE, "GCCCAT"},
+                {referenceSnippet, 11, Allele.create("CA", true), 0, -2, Strand.POSITIVE, "CCCATG"},
+                {referenceSnippet, 12, Allele.create("AT", true), 0, -2, Strand.POSITIVE, "CCATGA"},
 
-                {referenceSnippet, 10, Allele.create("CCA", true),  -1, -2, "CCCATG"},
-                {referenceSnippet, 11, Allele.create("CAT", true),  -1, -2, "CCATGA"},
-                {referenceSnippet, 12, Allele.create("ATG", true),  -1, -2, "CATGAT"},
+                {referenceSnippet, 10, Allele.create("CCA", true),  -1, -2, Strand.POSITIVE, "CCCATG"},
+                {referenceSnippet, 11, Allele.create("CAT", true),  -1, -2, Strand.POSITIVE, "CCATGA"},
+                {referenceSnippet, 12, Allele.create("ATG", true),  -1, -2, Strand.POSITIVE, "CATGAT"},
 
                 // Allele same as reference sequence:
-                {referenceSnippet, 0, Allele.create("AAA", true), 1, 1, "AAA"},
-                {referenceSnippet, 1, Allele.create("AA", true), 2, 1, "AAA"},
-                {referenceSnippet, 2, Allele.create("A", true), 3, 1, "AAA"},
+                {referenceSnippet, 0, Allele.create("AAA", true), 1, 1, Strand.POSITIVE, "AAA"},
+                {referenceSnippet, 1, Allele.create("AA", true), 2, 1, Strand.POSITIVE, "AAA"},
+                {referenceSnippet, 2, Allele.create("A", true), 3, 1, Strand.POSITIVE, "AAA"},
 
-                {referenceSnippet, 6, Allele.create("GGG", true), 1, 1, "GGG"},
-                {referenceSnippet, 7, Allele.create("GG", true), 2, 1, "GGG"},
-                {referenceSnippet, 8, Allele.create("G", true), 3, 1, "GGG"},
+                {referenceSnippet, 6, Allele.create("GGG", true), 1, 1, Strand.POSITIVE, "GGG"},
+                {referenceSnippet, 7, Allele.create("GG", true), 2, 1, Strand.POSITIVE, "GGG"},
+                {referenceSnippet, 8, Allele.create("G", true), 3, 1, Strand.POSITIVE, "GGG"},
 
-                {referenceSnippet, 6, Allele.create("GGG", true), 60, 60, "GGG"},
-                {referenceSnippet, 7, Allele.create("GG", true), 61, 60, "GGG"},
-                {referenceSnippet, 8, Allele.create("G", true), 62, 60, "GGG"},
+                {referenceSnippet, 6, Allele.create("GGG", true), 60, 60, Strand.POSITIVE, "GGG"},
+                {referenceSnippet, 7, Allele.create("GG", true), 61, 60, Strand.POSITIVE, "GGG"},
+                {referenceSnippet, 8, Allele.create("G", true), 62, 60, Strand.POSITIVE, "GGG"},
 
-                {referenceSnippet, 17, Allele.create("ATAG", true), 18, 17, "TATAGG"},
+                {referenceSnippet, 17, Allele.create("ATAG", true), 18, 17, Strand.POSITIVE, "TATAGG"},
 
-                {referenceSnippet, 4, Allele.create(referenceSnippet.substring(4), true), 18, 17, referenceSnippet.substring(3)},
+                {referenceSnippet, 4, Allele.create(referenceSnippet.substring(4), true), 18, 17, Strand.POSITIVE, referenceSnippet.substring(3)},
 
                 // Allele diffferent from reference sequence:
-                {referenceSnippet, 0, Allele.create("TAA", true), 1, 1, "TAA"},
-                {referenceSnippet, 1, Allele.create("AG", true), 2, 1, "AAG"},
-                {referenceSnippet, 2, Allele.create("T", true), 3, 1, "AAT"},
+                {referenceSnippet, 0, Allele.create("TAA", true), 1, 1, Strand.POSITIVE, "TAA"},
+                {referenceSnippet, 1, Allele.create("AG", true), 2, 1, Strand.POSITIVE, "AAG"},
+                {referenceSnippet, 2, Allele.create("T", true), 3, 1, Strand.POSITIVE, "AAT"},
 
-                {referenceSnippet, 6, Allele.create("GCC", true), 1, 1, "GCC"},
-                {referenceSnippet, 7, Allele.create("AG", true), 2, 1, "GAG"},
-                {referenceSnippet, 8, Allele.create("A", true), 3, 1, "GGA"},
+                {referenceSnippet, 6, Allele.create("GCC", true), 1, 1, Strand.POSITIVE, "GCC"},
+                {referenceSnippet, 7, Allele.create("AG", true), 2, 1, Strand.POSITIVE, "GAG"},
+                {referenceSnippet, 8, Allele.create("A", true), 3, 1, Strand.POSITIVE, "GGA"},
 
-                {referenceSnippet, 6, Allele.create("GCC", true), 60, 60, "GCC"},
-                {referenceSnippet, 7, Allele.create("AG", true), 61, 60, "GAG"},
-                {referenceSnippet, 8, Allele.create("A", true), 62, 60, "GGA"},
+                {referenceSnippet, 6, Allele.create("GCC", true), 60, 60, Strand.POSITIVE, "GCC"},
+                {referenceSnippet, 7, Allele.create("AG", true), 61, 60, Strand.POSITIVE, "GAG"},
+                {referenceSnippet, 8, Allele.create("A", true), 62, 60, Strand.POSITIVE, "GGA"},
 
-                {referenceSnippet, 17, Allele.create("ATAT", true), 18, 17, "TATATG"},
+                {referenceSnippet, 17, Allele.create("ATAT", true), 18, 17, Strand.POSITIVE, "TATATG"},
 
                 {referenceSnippet, 4, Allele.create(
                         new String(new char[referenceSnippet.length() - 4]).replace("\0", "A"), true),
-                        18, 17,
+                        18, 17, Strand.POSITIVE,
                         "T" + new String(new char[referenceSnippet.length() - 4]).replace("\0", "A")},
         };
     }
@@ -1267,9 +1275,9 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
         Assert.assertEquals( FuncotatorUtils.getNonOverlappingAltAlleleBaseString(refAllele, altAllele, copyRefBasesWhenAltIsPastEnd), expected);
     }
 
-    @Test(dataProvider = "provideDataForGetStartPositionInTranscript")
-    void testGetStartPositionInTranscript(final Locatable variant, final List<? extends Locatable> transcript, final Strand strand, final int expected) {
-        Assert.assertEquals( FuncotatorUtils.getStartPositionInTranscript(variant, transcript, strand), expected );
+    @Test(dataProvider = "provideDataForGetStartPositionInCodingSequence")
+    void testGetStartPositionInCodingSequence(final Locatable variant, final List<? extends Locatable> transcript, final Strand strand, final int expected) {
+        Assert.assertEquals( FuncotatorUtils.getStartPositionInCodingSequence(variant, transcript, strand), expected );
     }
 
     @Test(dataProvider = "providePositionAndExpectedAlignedPosition")
@@ -1284,7 +1292,7 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
 
     @Test(dataProvider = "provideDataForGetAlternateSequence")
     void testGetAlternateSequence(final String refCodingSeq, final int startPos, final Allele refAllele, final Allele altAllele, final String expected) {
-        Assert.assertEquals(FuncotatorUtils.getAlternateSequence(refCodingSeq, startPos, refAllele, altAllele), expected);
+        Assert.assertEquals(FuncotatorUtils.getAlternateSequence(refCodingSeq, startPos, refAllele, altAllele, Strand.POSITIVE), expected);
     }
 
     @Test(dataProvider = "provideDataForGetEukaryoticAminoAcidByCodon")
@@ -1295,6 +1303,11 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
     @Test(dataProvider = "provideDataForGetMitochondrialAminoAcidByCodon")
     void testGetMitochondrialAminoAcidByCodon(final String codon, final boolean isFirst, final AminoAcid expected) {
         Assert.assertEquals(FuncotatorUtils.getMitochondrialAminoAcidByCodon(codon, isFirst), expected);
+    }
+
+    @Test
+    void testGetCodonChangeString() {
+        throw new NotImplementedException("OMG WTF FIll this in!");
     }
 
     @Test
@@ -1420,13 +1433,16 @@ public class FuncotatorUtilsUnitTest extends GATKBaseTest {
                                   final Allele refAllele,
                                   final int codingSequenceRefAlleleStart,
                                   final int alignedRefAlleleStart,
+                                  final Strand strand,
                                   final String expected) {
 
         // Make a Dummy Locatable for Logging:
         final Locatable dummyLocatableForLogging = new SimpleInterval("ReferenceSnippet", 1, 100);
 
+        final Allele altAllele = Allele.create(Utils.dupChar('A', refAllele.length()));
+
         Assert.assertEquals(
-                FuncotatorUtils.getAlignedRefAllele(referenceSnippet,referencePadding,refAllele,codingSequenceRefAlleleStart,alignedRefAlleleStart,dummyLocatableForLogging),
+                FuncotatorUtils.getAlignedRefAllele(referenceSnippet,referencePadding,refAllele,altAllele,codingSequenceRefAlleleStart,alignedRefAlleleStart,strand,dummyLocatableForLogging),
                 expected
         );
     }

@@ -298,10 +298,25 @@ public class FuncotatorIntegrationTest extends CommandLineProgramTest {
 //                        "Homo_sapiens_assembly38.fasta",
 //                        FuncotatorTestConstants.REFERENCE_VERSION_HG38
 //                },
+//                {
+//                        "0816201804HC0_R01C01.vcf",
+//                        "Homo_sapiens_assembly19.fasta",
+//                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
+//                },
+                {
+                        "regressionTestVariantSet1.vcf",
+                        "Homo_sapiens_assembly19.fasta",
+                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
+                },
+//                {
+//                        "regressionTestVariantSet2.vcf",
+//                        "Homo_sapiens_assembly19.fasta",
+//                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
+//                },
                 {
                         "tmp.vcf",
                         "Homo_sapiens_assembly19.fasta",
-                        FuncotatorTestConstants.REFERENCE_VERSION_HG19,
+                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
                 },
         };
     }

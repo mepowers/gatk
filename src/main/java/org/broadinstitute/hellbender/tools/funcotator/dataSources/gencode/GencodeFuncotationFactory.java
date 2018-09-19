@@ -638,19 +638,17 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
         // TODO: check for complex INDEL and warn and skip.
 
-        final VariantContext variantToUse = variant;
-
         // Find the sub-feature of transcript that contains our variant:
-        final GencodeGtfFeature containingSubfeature = getContainingGtfSubfeature(variantToUse, transcript);
+        final GencodeGtfFeature containingSubfeature = getContainingGtfSubfeature(variant, transcript);
 
         // Make sure the sub-regions in the transcript actually contain the variant:
         // TODO: this is slow, and repeats work that is done later in the process (we call getSortedCdsAndStartStopPositions when creating the sequence comparison)
-        final int startPosInTranscript =  FuncotatorUtils.getStartPositionInTranscript(variantToUse, getSortedCdsAndStartStopPositions(transcript), transcript.getGenomicStrand() );
+        final int startPosInTranscript =  FuncotatorUtils.getStartPositionInCodingSequence(variant, getSortedCdsAndStartStopPositions(transcript), transcript.getGenomicStrand() );
 
         // Determine what kind of region we're in and handle it in it's own way:
         if ( containingSubfeature == null ) {
             // We have an IGR variant
-            gencodeFuncotation = createIgrFuncotation(variantToUse, altAllele, reference);
+            gencodeFuncotation = createIgrFuncotation(variant, altAllele, reference);
         }
         else if ( GencodeGtfExonFeature.class.isAssignableFrom(containingSubfeature.getClass()) ) {
 
@@ -662,16 +660,16 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
             }
             else {
                 // We have a coding region variant
-                gencodeFuncotation = createExonFuncotation(variantToUse, altAllele, gtfFeature, reference, transcript, (GencodeGtfExonFeature) containingSubfeature);
+                gencodeFuncotation = createExonFuncotation(variant, altAllele, gtfFeature, reference, transcript, (GencodeGtfExonFeature) containingSubfeature);
             }
         }
         else if ( GencodeGtfUTRFeature.class.isAssignableFrom(containingSubfeature.getClass()) ) {
             // We have a UTR variant
-            gencodeFuncotation = createUtrFuncotation(variantToUse, altAllele, reference, gtfFeature, transcript, (GencodeGtfUTRFeature) containingSubfeature);
+            gencodeFuncotation = createUtrFuncotation(variant, altAllele, reference, gtfFeature, transcript, (GencodeGtfUTRFeature) containingSubfeature);
         }
         else if ( GencodeGtfTranscriptFeature.class.isAssignableFrom(containingSubfeature.getClass()) ) {
             // We have an intron variant
-            gencodeFuncotation = createIntronFuncotation(variantToUse, altAllele, reference, gtfFeature, transcript, reference);
+            gencodeFuncotation = createIntronFuncotation(variant, altAllele, reference, gtfFeature, transcript, reference);
         }
         else {
             // Uh-oh!  Problemz.
@@ -1186,7 +1184,7 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
                 final String fivePrimeUtrCodingSequence =
                         getFivePrimeUtrSequenceFromTranscriptFasta( transcript.getTranscriptId(), transcriptIdMap, transcriptFastaReferenceDataSource, numExtraTrailingBases);
 
-                final int codingStartPos = FuncotatorUtils.getStartPositionInTranscript(variant, activeRegions, strand);
+                final int codingStartPos = FuncotatorUtils.getStartPositionInCodingSequence(variant, activeRegions, strand);
 
                 // But we can really just use the referenceBases to do this:
                 final String rawAltUtrSubSequence = (referenceBases.substring(referenceWindow-numLeadingBasesForUtrAnnotationSequenceConstruction, referenceWindow) +
@@ -1517,6 +1515,11 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         final Allele refAllele = FuncotatorUtils.getStrandCorrectedAllele(variant.getReference(), transcript.getGenomicStrand());
         final Allele altAllele = FuncotatorUtils.getStrandCorrectedAllele(alternateAllele, transcript.getGenomicStrand());
         final String referenceBases = getReferenceBases(variant.getReference(), alternateAllele, reference, transcript.getGenomicStrand());
+//        final String referenceBases2 = FuncotatorUtils.getBasesInWindowAroundReferenceAllele(variant.getReference(), alternateAllele, transcript.getGenomicStrand(), referenceWindow, reference);
+
+//        if ( !referenceBases.equals(referenceBases2) ) {
+//            logger.debug("Uh Oh");
+//        }
 
         // Set our reference sequence in the SequenceComparison:
         sequenceComparison.setReferenceWindow(referenceWindow);
@@ -1538,7 +1541,7 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
         // Get the coding region start position (in the above computed transcript coding region):
         sequenceComparison.setCodingSequenceAlleleStart(
-                FuncotatorUtils.getStartPositionInTranscript(variant, exonPositionList, transcript.getGenomicStrand())
+                FuncotatorUtils.getStartPositionInCodingSequence(variant, exonPositionList, transcript.getGenomicStrand())
         );
 
         // Get the overlapping exon start / stop as an interval from the given variant:
@@ -1564,8 +1567,10 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
                         referenceBases,
                         referenceWindow,
                         refAllele,
+                        altAllele,
                         sequenceComparison.getCodingSequenceAlleleStart(),
                         sequenceComparison.getAlignedCodingSequenceAlleleStart(),
+                        sequenceComparison.getStrand(),
                         variant)
         );
 
@@ -1591,7 +1596,8 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
                         sequenceComparison.getAlignedReferenceAllele(),
                         alignedRefAlleleStartPos,
                         refAllele,
-                        altAllele)
+                        altAllele,
+                        sequenceComparison.getStrand())
         );
 
 
@@ -1638,7 +1644,8 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
                                 sequenceComparison.getAlignedCodingSequenceReferenceAllele(),
                                 alignedRefAlleleStartPos,
                                 refAllele,
-                                altAllele)
+                                altAllele,
+                                sequenceComparison.getStrand())
                 );
 
                 // Set our alternate amino acid sequence:
