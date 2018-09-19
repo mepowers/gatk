@@ -1565,36 +1565,32 @@ public final class FuncotatorUtils {
         // we need to know how long the variant is (so we can adjust for - strand variants)
         final int variantLength = Math.max(refAllele.length(), altAllele.length());
 
+        // Compute the number of bases that we must prepend to this one to get to the start of a codon:
         final int extraBasesNeededForCodonAlignment = (codingSequenceRefAlleleStart - alignedRefAlleleStart);
-        int refStartPos = referencePadding - extraBasesNeededForCodonAlignment;
 
-        // OLD WAY:
+        // Get the index in our reference snipped of the aligned codon start:
+        int refStartAlignedIndex;
         if ( (strand == Strand.NEGATIVE) && (refAllele.length() < altAllele.length()) ) {
-            refStartPos = referencePadding + extraBasesNeededForCodonAlignment;
+            // Insertions on the - strand have to be handled as a special case because of how
+            // the referenceSnippet is constructed:
+            refStartAlignedIndex = referencePadding + variantLength - extraBasesNeededForCodonAlignment - 1;
         }
-
-        // Questionable new way:
-        if ( (strand == Strand.NEGATIVE) && (refAllele.length() < altAllele.length()) ) {
-            if ( variantLength ==  2 ) {
-                refStartPos = referencePadding + extraBasesNeededForCodonAlignment + variantLength - 1;
-            }
-            else {
-                refStartPos = referencePadding + extraBasesNeededForCodonAlignment;
-            }
+        else {
+            refStartAlignedIndex = referencePadding - extraBasesNeededForCodonAlignment;
         }
 
         // TODO: This should probably be an error condition:
-        if ( refStartPos < 0 ) {
-            refStartPos = 0;
+        if ( refStartAlignedIndex < 0 ) {
+            refStartAlignedIndex = 0;
         }
 
         // Round to the nearest multiple of 3 to get the end position.
         // Note this is the position of the first base NOT in the REF allele
         // (because it's used for substring coordinates).
-        int refEndPosExclusive = refStartPos + (int)(Math.ceil((extraBasesNeededForCodonAlignment + refAllele.length()) / 3.0) * 3);
+        int refEndPosExclusive = refStartAlignedIndex + (int)(Math.ceil((extraBasesNeededForCodonAlignment + refAllele.length()) / 3.0) * 3);
 
-        // Create the aligned reference:
-        String alignedReferenceAllele = referenceSnippet.substring(refStartPos, refEndPosExclusive);
+        // Create the aligned reference:=
+        String alignedReferenceAllele = referenceSnippet.substring(refStartAlignedIndex, refEndPosExclusive);
 
         final String computedReferenceAlleleWithSubstitution = alignedReferenceAllele.substring(extraBasesNeededForCodonAlignment, extraBasesNeededForCodonAlignment + refAllele.length());
 
@@ -1605,9 +1601,9 @@ public final class FuncotatorUtils {
 
             // Oh well, we should use the reference we were given anyways...
             final String substitutedReferenceSnippet = getAlternateSequence(referenceSnippet, referencePadding + 1, refAllele, refAllele, strand);
-            refEndPosExclusive = refStartPos + (int)(Math.ceil((extraBasesNeededForCodonAlignment + refAllele.length()) / 3.0) * 3);
+            refEndPosExclusive = refStartAlignedIndex + (int)(Math.ceil((extraBasesNeededForCodonAlignment + refAllele.length()) / 3.0) * 3);
 
-            final String substitutedAlignedAlleleSeq = substitutedReferenceSnippet.substring(refStartPos, refEndPosExclusive);
+            final String substitutedAlignedAlleleSeq = substitutedReferenceSnippet.substring(refStartAlignedIndex, refEndPosExclusive);
 
             // Warn the user!
             final String positionString = '[' + variantGenomicPositionForLogging.getContig() + ":" + variantGenomicPositionForLogging.getStart() + ']';
