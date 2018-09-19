@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.BetaFeature;
@@ -112,6 +113,11 @@ public final class FilterIntervals extends CommandLineProgram {
     public static final String MAXIMUM_MAPPABILITY_LONG_NAME = "maximum-mappability";
     public static final String MINIMUM_SEGMENTAL_DUPLICATION_CONTENT_LONG_NAME = "minimum-segmental-duplication-content";
     public static final String MAXIMUM_SEGMENTAL_DUPLICATION_CONTENT_LONG_NAME = "maximum-segmental-duplication-content";
+    public static final String LOW_COUNT_FILTER_COUNT_THRESHOLD_LONG_NAME = "low-count-filter-count-threshold";
+    public static final String LOW_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME = "low-count-filter-percentage-of-samples";
+    public static final String EXTREME_COUNT_FILTER_MINIMUM_PERCENTILE_LONG_NAME = "extreme-count-filter-minimum-percentile";
+    public static final String EXTREME_COUNT_FILTER_MAXIMUM_PERCENTILE_LONG_NAME = "extreme-count-filter-maximum-percentile";
+    public static final String EXTREME_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME = "extreme-count-filter-percentage-of-samples";
 
     @Argument(
             doc = "Input file containing annotations for genomic intervals (output of AnnotateIntervals).  " +
@@ -185,17 +191,94 @@ public final class FilterIntervals extends CommandLineProgram {
     )
     private double maximumSegmentalDuplicationContent = 0.5;
 
+    @Argument(
+            doc = "Count-threshold parameter for the low-count filter.  Intervals with a count " +
+                    "strictly less than this threshold in a percentage of samples strictly greater than " +
+                    LOW_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME + " will be filtered out.  " +
+                    "(This is the first count-based filter applied.)",
+            fullName = LOW_COUNT_FILTER_COUNT_THRESHOLD_LONG_NAME,
+            minValue = 0,
+            optional = true
+    )
+    private int lowCountFilterCountThreshold = 5;
+
+    @Argument(
+            doc = "Percentage-of-samples parameter for the low-count filter.  Intervals with a count " +
+                    "strictly less than " + LOW_COUNT_FILTER_COUNT_THRESHOLD_LONG_NAME +
+                    " in a percentage of samples strictly greater than this will be filtered out.  " +
+                    "(This is the first count-based filter applied.)",
+            fullName = LOW_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME,
+            minValue = 0.,
+            maxValue = 100.,
+            optional = true
+    )
+    private double lowCountFilterPercentageOfSamples = 90.;
+
+    @Argument(
+            doc = "Minimum-percentile parameter for the extreme-count filter.  Intervals with a count " +
+                    "that has a percentile strictly less than this in a percentage of samples strictly greater than " +
+                    EXTREME_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME + " will be filtered out.  " +
+                    "(This is the second count-based filter applied.)",
+            fullName = EXTREME_COUNT_FILTER_MINIMUM_PERCENTILE_LONG_NAME,
+            minValue = 0.,
+            maxValue = 100.,
+            optional = true
+    )
+    private double extremeCountFilterMinimumPercentile = 1.;
+
+    @Argument(
+            doc = "Maximum-percentile parameter for the extreme-count filter.  Intervals with a count " +
+                    "that has a percentile strictly greater than this in a percentage of samples strictly greater than " +
+                    EXTREME_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME + " will be filtered out.  " +
+                    "(This is the second count-based filter applied.)",
+            fullName = EXTREME_COUNT_FILTER_MAXIMUM_PERCENTILE_LONG_NAME,
+            minValue = 0.,
+            maxValue = 100.,
+            optional = true
+    )
+    private double extremeCountFilterMaximumPercentile = 99.;
+
+    @Argument(
+            doc = "Percentage-of-samples parameter for the extreme-count filter.  Intervals with a count " +
+                    "that has a percentile outside of [" + EXTREME_COUNT_FILTER_MINIMUM_PERCENTILE_LONG_NAME + ", " +
+                    EXTREME_COUNT_FILTER_MAXIMUM_PERCENTILE_LONG_NAME + "] in a percentage of samples strictly greater than " +
+                    "this will be filtered out.  (This is the second count-based filter applied.)",
+            fullName = EXTREME_COUNT_FILTER_PERCENTAGE_OF_SAMPLES_LONG_NAME,
+            minValue = 0.,
+            maxValue = 100.,
+            optional = true
+    )
+    private double extremeCountFilterPercentageOfSamples = 90.;
+
     private SimpleIntervalCollection specifiedIntervals;
     private AnnotatedIntervalCollection annotatedIntervals;
-    private RealMatrix readCountMatrix;
 
     @Override
     public Object doWork() {
-        validateArguments();
+        validateArgumentsAndResolveIntervals();
+        final SimpleIntervalCollection filteredIntervals = filterIntervals();
+        logger.info(String.format("Writing filtered intervals to %s...", outputFilteredIntervalsFile));
+        filteredIntervals.write(outputFilteredIntervalsFile);
 
+        return "SUCCESS";
+    }
+
+    private void validateArgumentsAndResolveIntervals() {
+        //validate input intervals and files
+        CopyNumberArgumentValidationUtils.validateIntervalArgumentCollection(intervalArgumentCollection);
+        if (inputAnnotatedIntervalsFile == null && inputReadCountFiles.isEmpty()) {
+            throw new UserException("Must provide annotated intervals or counts.");
+        }
+        if (inputAnnotatedIntervalsFile != null) {
+            IOUtils.canReadFile(inputAnnotatedIntervalsFile);
+        }
+        inputReadCountFiles.forEach(IOUtils::canReadFile);
+        Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
+                "List of input read-count files cannot contain duplicates.");
+
+        //parse inputs to resolve intervals and validate consistency across inputs
         if (inputReadCountFiles.isEmpty()) {
             //only annotated intervals provided (no counts)
-            //we end up reading the annotated intervals twice, first to get the sequence dictionary; probably not worth cleaning up
             annotatedIntervals = new AnnotatedIntervalCollection(inputAnnotatedIntervalsFile);
             specifiedIntervals = new SimpleIntervalCollection(
                     annotatedIntervals.getMetadata(),
@@ -213,33 +296,81 @@ public final class FilterIntervals extends CommandLineProgram {
                 annotatedIntervals = CopyNumberArgumentValidationUtils.validateAnnotatedIntervalsSubset(
                         inputAnnotatedIntervalsFile, specifiedIntervals, logger);
             }
-            readCountMatrix = constructReadCountMatrix(inputReadCountFiles);
         }
-        final SimpleIntervalCollection filteredIntervals = filterIntervals();
-        logger.info(String.format("Writing filtered intervals to %s...", outputFilteredIntervalsFile));
-        filteredIntervals.write(outputFilteredIntervalsFile);
-
-        return "SUCCESS";
     }
 
-    private void validateArguments() {
-        CopyNumberArgumentValidationUtils.validateIntervalArgumentCollection(intervalArgumentCollection);
-        if (inputAnnotatedIntervalsFile == null && inputReadCountFiles.isEmpty()) {
-            throw new UserException("Must provide annotated intervals or counts.");
+    private SimpleIntervalCollection filterIntervals() {
+        //apply annotation-based filters
+        logger.info("Applying annotation-based filters...");
+        //initialize filtered intervals and remaining-interval count
+        List<AnnotatedInterval> filteredAnnotatedIntervals = annotatedIntervals.getRecords();
+        int numRemainingIntervals = filteredAnnotatedIntervals.size();
+        //check which annotations are present and apply corresponding filters
+        final List<AnnotationKey<?>> annotationKeys = annotatedIntervals.getRecords().get(0).getAnnotationMap().getKeys();
+        if (annotationKeys.contains(CopyNumberAnnotations.GC_CONTENT)) {    //this should always be true, but we check it anyway
+            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
+                    .filter(i -> {
+                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.GC_CONTENT);
+                        return minimumGCContent <= value && value <= maximumGCContent;})
+                    .collect(Collectors.toList());
+            logger.info(String.format("%d / %d remaining intervals passed the GC-content filter [%s, %s]...",
+                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumGCContent, maximumGCContent));
+            numRemainingIntervals = filteredAnnotatedIntervals.size();
         }
-        if (inputAnnotatedIntervalsFile != null) {
-            IOUtils.canReadFile(inputAnnotatedIntervalsFile);
+        if (annotationKeys.contains(CopyNumberAnnotations.MAPPABILITY)) {
+            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
+                    .filter(i -> {
+                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.MAPPABILITY);
+                        return minimumMappability <= value && value <= maximumMappability;})
+                    .collect(Collectors.toList());
+            logger.info(String.format("%d / %d remaining intervals passed the mappability filter [%s, %s]...",
+                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumMappability, maximumMappability));
+            numRemainingIntervals = filteredAnnotatedIntervals.size();
         }
-        inputReadCountFiles.forEach(IOUtils::canReadFile);
-        Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
-                "List of input read-count files cannot contain duplicates.");
+        if (annotationKeys.contains(CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT)) {
+            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
+                    .filter(i -> {
+                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT);
+                        return minimumSegmentalDuplicationContent <= value && value <= maximumSegmentalDuplicationContent;})
+                    .collect(Collectors.toList());
+            logger.info(String.format("%d / %d remaining intervals passed the segmental-duplication-content filter [%s, %s]...",
+                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumSegmentalDuplicationContent, maximumSegmentalDuplicationContent));
+            numRemainingIntervals = filteredAnnotatedIntervals.size();
+        }
+        //convert list of filtered annotated intervals to a SimpleIntervalCollection
+        SimpleIntervalCollection filteredIntervals = new SimpleIntervalCollection(
+                specifiedIntervals.getMetadata(),
+                filteredAnnotatedIntervals.stream().map(AnnotatedInterval::getInterval).collect(Collectors.toList()));
+
+        //apply count-based filters
+        if (!inputReadCountFiles.isEmpty()) {
+            final RealMatrix readCountMatrix = constructReadCountMatrix(logger, inputReadCountFiles, filteredIntervals);
+            logger.info("Applying count-based filters...");
+
+            //low-count filter: filter intervals with a count less than lowCountFilterCountThreshold
+            //for at least lowCountFilterPercentageOfSamples
+
+            //extreme-count filter: filter remaining intervals with counts that fall outside of the per-sample percentiles
+            //[extremeCountMinimumPercentile, extremeCountMaximumPercentile] for at least extremeCountFilterPercentageOfSamples
+        }
+
+        //return the filtered intervals as a SimpleIntervalCollection (emit a warning if no intervals passed all filters)
+        logger.info(String.format("%d / %d intervals passed all filters...",
+                numRemainingIntervals, annotatedIntervals.size()));
+        if (numRemainingIntervals == 0) {
+            logger.warn("No intervals passed all filters.  " +
+                    "Check that filtering parameters are set appropriately (for counts data, if provided).");
+        }
+        return filteredIntervals;
     }
 
-    private RealMatrix constructReadCountMatrix(final List<File> inputReadCountFiles) {
+    private static RealMatrix constructReadCountMatrix(final Logger logger,
+                                                       final List<File> inputReadCountFiles,
+                                                       final SimpleIntervalCollection intervals) {
         logger.info("Validating and aggregating input read-counts files...");
         final int numSamples = inputReadCountFiles.size();
-        final int numIntervals = specifiedIntervals.size();
-        final Set<SimpleInterval> intervalSubset = new HashSet<>(specifiedIntervals.getRecords());
+        final int numIntervals = intervals.size();
+        final Set<SimpleInterval> intervalSubset = new HashSet<>(intervals.getRecords());
         final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
         final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
         while (inputReadCountFilesIterator.hasNext()) {
@@ -249,7 +380,7 @@ public final class FilterIntervals extends CommandLineProgram {
             final SimpleCountCollection readCounts = SimpleCountCollection.read(inputReadCountFile);
             if (!CopyNumberArgumentValidationUtils.isSameDictionary(
                     readCounts.getMetadata().getSequenceDictionary(),
-                    specifiedIntervals.getMetadata().getSequenceDictionary())) {
+                    intervals.getMetadata().getSequenceDictionary())) {
                 logger.warn(String.format("Sequence dictionary for read-counts file %s does not match those in other read-counts files.", inputReadCountFile));
             }
             final double[] subsetReadCounts = readCounts.getRecords().stream()
@@ -262,45 +393,5 @@ public final class FilterIntervals extends CommandLineProgram {
             readCountMatrix.setRow(sampleIndex, subsetReadCounts);
         }
         return readCountMatrix;
-    }
-
-    private SimpleIntervalCollection filterIntervals() {
-        //filter by annotations
-        List<AnnotatedInterval> filteredAnnotatedIntervals = annotatedIntervals.getRecords();
-        int numRemainingIntervals = specifiedIntervals.size();
-        final List<AnnotationKey<?>> annotationKeys = annotatedIntervals.getRecords().get(0).getAnnotationMap().getKeys();
-        if (annotationKeys.contains(CopyNumberAnnotations.GC_CONTENT)) {    //this should always be true, but we check it anyway
-            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
-                    .filter(i -> {
-                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.GC_CONTENT);
-                        return minimumGCContent <= value && value <= maximumGCContent;})
-                    .collect(Collectors.toList());
-            logger.info(String.format("%d / %d intervals passed GC-content filter [%s, %s]...",
-                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumGCContent, maximumGCContent));
-            numRemainingIntervals = filteredAnnotatedIntervals.size();
-        }
-        if (annotationKeys.contains(CopyNumberAnnotations.MAPPABILITY)) {
-            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
-                    .filter(i -> {
-                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.MAPPABILITY);
-                        return minimumMappability <= value && value <= maximumMappability;})
-                    .collect(Collectors.toList());
-            logger.info(String.format("%d / %d intervals passed mappability filter [%s, %s]...",
-                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumMappability, maximumMappability));
-            numRemainingIntervals = filteredAnnotatedIntervals.size();
-        }
-        if (annotationKeys.contains(CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT)) {
-            filteredAnnotatedIntervals = filteredAnnotatedIntervals.stream()
-                    .filter(i -> {
-                        final double value = i.getAnnotationMap().getValue(CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT);
-                        return minimumSegmentalDuplicationContent <= value && value <= maximumSegmentalDuplicationContent;})
-                    .collect(Collectors.toList());
-            logger.info(String.format("%d / %d intervals passed segmental-duplication-content filter [%s, %s]...",
-                    filteredAnnotatedIntervals.size(), numRemainingIntervals, minimumSegmentalDuplicationContent, maximumSegmentalDuplicationContent));
-            numRemainingIntervals = filteredAnnotatedIntervals.size();
-        }
-        return new SimpleIntervalCollection(
-                specifiedIntervals.getMetadata(),
-                filteredAnnotatedIntervals.stream().map(AnnotatedInterval::getInterval).collect(Collectors.toList()));
     }
 }
