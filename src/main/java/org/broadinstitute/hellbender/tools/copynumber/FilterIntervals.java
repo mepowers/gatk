@@ -315,15 +315,18 @@ public final class FilterIntervals extends CommandLineProgram {
             final List<AnnotationKey<?>> annotationKeys = annotatedIntervals.getRecords().get(0).getAnnotationMap().getKeys();
             if (annotationKeys.contains(CopyNumberAnnotations.GC_CONTENT)) {    //this should always be true, but we check it anyway
                 updateMaskByAnnotationFilter(logger, annotatedIntervals, mask,
-                        CopyNumberAnnotations.GC_CONTENT, "GC-content", minimumGCContent, maximumGCContent);
+                        CopyNumberAnnotations.GC_CONTENT, "GC-content",
+                        minimumGCContent, maximumGCContent);
             }
             if (annotationKeys.contains(CopyNumberAnnotations.MAPPABILITY)) {
                 updateMaskByAnnotationFilter(logger, annotatedIntervals, mask,
-                        CopyNumberAnnotations.MAPPABILITY, "mappability", minimumMappability, maximumMappability);
+                        CopyNumberAnnotations.MAPPABILITY, "mappability",
+                        minimumMappability, maximumMappability);
             }
             if (annotationKeys.contains(CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT)) {
                 updateMaskByAnnotationFilter(logger, annotatedIntervals, mask,
-                        CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT, "segmental-duplication-content", minimumMappability, maximumMappability);
+                        CopyNumberAnnotations.SEGMENTAL_DUPLICATION_CONTENT, "segmental-duplication-content",
+                        minimumSegmentalDuplicationContent, maximumSegmentalDuplicationContent);
             }
         }
 
