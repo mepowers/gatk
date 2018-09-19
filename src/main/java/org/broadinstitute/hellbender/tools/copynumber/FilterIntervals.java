@@ -344,7 +344,7 @@ public final class FilterIntervals extends CommandLineProgram {
                     .forEach(i -> {
                         if (Arrays.stream(readCountMatrix.getColumn(i))
                                 .filter(c -> c < lowCountFilterCountThreshold)
-                                .count() > lowCountFilterPercentageOfSamples * numSamples) {
+                                .count() > lowCountFilterPercentageOfSamples * numSamples / 100.) {
                             mask[i] = true;
                         }
                     });
@@ -381,7 +381,7 @@ public final class FilterIntervals extends CommandLineProgram {
                     .forEach(i -> {
                         if (IntStream.range(0, numSamples)
                                 .filter(sampleIndex -> percentileMask[sampleIndex][i])
-                                .count() > extremeCountFilterPercentageOfSamples * numSamples) {
+                                .count() > extremeCountFilterPercentageOfSamples * numSamples / 100.) {
                             mask[i] = true;
                         }
                     });
