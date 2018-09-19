@@ -1,5 +1,7 @@
 package org.broadinstitute.hellbender.tools.copynumber;
 
+import htsjdk.samtools.util.Interval;
+import htsjdk.samtools.util.IntervalList;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
@@ -35,8 +37,8 @@ import java.util.stream.IntStream;
 
 /**
  * Given annotated intervals output by {@link AnnotateIntervals} and/or counts collected on those intervals output
- * by {@link CollectReadCounts}, outputs a filtered interval list.  Parameters for filtering based on the annotations
- * and counts can be adjusted.  Annotation-based filters will be applied first, followed by count-based
+ * by {@link CollectReadCounts}, outputs a filtered Picard interval list.  Parameters for filtering based on the
+ * annotations and counts can be adjusted.  Annotation-based filters will be applied first, followed by count-based
  * filters.
  *
  * <h3>Inputs</h3>
@@ -140,7 +142,7 @@ public final class FilterIntervals extends CommandLineProgram {
     private List<File> inputReadCountFiles = new ArrayList<>();
 
     @Argument(
-            doc = "Output file for filtered intervals.",
+            doc = "Output Picard interval-list file containing the filtered intervals.",
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME
     )
@@ -259,6 +261,8 @@ public final class FilterIntervals extends CommandLineProgram {
         validateFilesAndResolveIntervals();
         final SimpleIntervalCollection filteredIntervals = filterIntervals();
         logger.info(String.format("Writing filtered intervals to %s...", outputFilteredIntervalsFile));
+        final IntervalList filteredIntervalList = new IntervalList(filteredIntervals.getMetadata().getSequenceDictionary());
+        filteredIntervals.getIntervals().forEach(i -> filteredIntervalList.add(new Interval(i)));
         filteredIntervals.write(outputFilteredIntervalsFile);
 
         return "SUCCESS";
