@@ -204,7 +204,7 @@ public class CNNScoreVariants extends VariantWalker {
         IntelGKLUtils utils = new IntelGKLUtils();
         if (utils.isAvxSupported() == false)
         {
-            return AVXREQUIRED_ERROR;
+            return new String[]{CNNScoreVariants.AVXREQUIRED_ERROR};
         }
 
         return null;
